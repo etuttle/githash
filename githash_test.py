@@ -155,3 +155,22 @@ class TestGitHasher(TestGitHashBase):
         hasher.add_file('file2')
         self.assertEqual('53b08c1fc6223d0c326e2146a5ccf8dbccf8223b', hasher.digest())
 
+    def test_hash_meta(self):
+        hasher = GitHasher(repo=self.repo)
+        hasher.add_meta('a', '1')
+        self.assertEqual('f29bc91bbdab169fc0c0a326965953d11c7dff83', hasher.digest())
+
+        hasher = GitHasher(repo=self.repo)
+        hasher.add_meta('a', '2')
+        hasher.add_meta('a', '1')
+        self.assertEqual('f29bc91bbdab169fc0c0a326965953d11c7dff83', hasher.digest())
+
+        hasher = GitHasher(repo=self.repo)
+        hasher.add_meta('a', '1')
+        hasher.add_meta('b', '2')
+        self.assertEqual('87f7ff9d1e933e7b40a6b46cc6a3c6663247d915', hasher.digest())
+
+        hasher = GitHasher(repo=self.repo)
+        hasher.add_meta('b', '2')
+        hasher.add_meta('a', '1')
+        self.assertEqual('87f7ff9d1e933e7b40a6b46cc6a3c6663247d915', hasher.digest())

@@ -24,6 +24,7 @@ class GitHasher:
         else:
             raise ValueError("Requires either dir or repo")
         self.hash = hashlib.sha1()
+        self.meta = {}
 
     def add_file(self, file):
         filehash = self.repo.file(file)
@@ -33,8 +34,17 @@ class GitHasher:
         treehash = self.repo.tree(prefix)
         self.hash.update(treehash)
 
+    def add_meta(self, key, value):
+        self.meta[key] = value
+
     def digest(self):
+        self._hash_meta()
         return self.hash.hexdigest()
+
+    def _hash_meta(self):
+        for k in sorted(self.meta.keys()):
+            self.hash.update(k)
+            self.hash.update(self.meta[k])
 
 
 class NoSuchFileError(ValueError):
