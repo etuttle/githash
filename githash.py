@@ -126,7 +126,7 @@ class GitHashRepo:
     def tree(self, prefix):
         norm_prefix = self._norm_path(prefix)
 
-        paths = [p for p in self._subpaths(norm_prefix)]
+        paths = [p for p in self._sub_paths(norm_prefix)]
         if len(paths) == 0:
             raise NoSuchFileError(prefix)
 
@@ -134,13 +134,25 @@ class GitHashRepo:
         return b"\n".join(res)
 
     def _create_index(self):
+        """
+        Read the index into an OrderedDict to preserve the key order.  The key
+        order established in the index is used when enumerating sub-paths,
+        so it must be stable to get a deterministic hash.
+        :return: OrderedDict of path to IndexEntry
+        """
         self.index = OrderedDict()
         with open(self.index_file) as f:
             for x in dindex.read_index(f):
                 self.index[x[0]] = dindex.IndexEntry(*x[1:])
 
-    def _subpaths(self, path):
+    def _sub_paths(self, path):
+        """
+        Generator for sub-paths of path in the index, in index order.  This
+        assumes that the index key order matches python's sort order.
+        """
         keys = self.index.keys()
+        # bisect to find the first index with key "greater than or equal to"
+        # path, then scan forward checking that sub-paths start with path
         i = bisect_left(keys, path)
         while i < len(keys):
             key = keys[i]

@@ -112,6 +112,23 @@ class TestGitHashRepo(TestGitHashBase):
         linkstr = self.repo.file('link')
         self.assertEqual('120000 23294b0610492cf55c1c4835216f20d376a287dd 0	link', linkstr)
 
+    def test_subpaths(self):
+        self.mkdir('dir0')
+        self.mkfile('dir0/file0', 'hello0')
+        self.mkdir('dir1')
+        self.mkfile('dir1/file1', 'hello1')
+        self.mkdir('dir2')
+        self.mkfile('dir2/file2', 'hello2')
+
+        self.repo.update()
+        self.assertEqual(['dir0/file0'], list(self.repo._sub_paths('dir0')))
+        self.assertEqual(['dir1/file1'], list(self.repo._sub_paths('dir1')))
+        self.assertEqual(['dir2/file2'], list(self.repo._sub_paths('dir2')))
+        self.assertEqual(['dir0/file0',
+                          'dir1/file1',
+                          'dir2/file2'], list(self.repo._sub_paths('dir')))
+        self.assertEqual([], list(self.repo._sub_paths('nope')))
+
 
 class TestGitHasher(TestGitHashBase):
     def file_test(self, mode, expected):
