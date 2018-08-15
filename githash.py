@@ -121,7 +121,7 @@ class GitHashRepo:
             raise NoSuchFileError(prefix)
 
         res = [self._entry_str(self.index[p], p) for p in paths]
-        return "\n".join(res)
+        return b"\n".join(res)
 
     def _create_index(self):
         self.index = OrderedDict()
@@ -148,8 +148,13 @@ class GitHashRepo:
 
     @staticmethod
     def _entry_str(entry, path):
-        mode = '%o' % dindex.cleanup_mode(entry.mode)
-        return "{mode} {sha} 0\t{file}".format(mode=mode,
-                                               sha=entry.sha,
-                                               file=path)
+        # To be encoding-agnostic, ensure that values are bytes, and return
+        # a byte string.
+        assert(isinstance(entry.sha, (str, bytes, bytearray)))
+        assert(isinstance(path, (str, bytes, bytearray)))
+
+        mode = b'%o' % dindex.cleanup_mode(entry.mode)
+        return b"{mode} {sha} 0\t{file}".format(mode=mode,
+                                                sha=entry.sha,
+                                                file=path)
     
