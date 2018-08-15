@@ -1,7 +1,10 @@
+import dulwich.index as dindex
 import errno
 import hashlib
 import os
 import subprocess
+from collections import OrderedDict
+from _bisect import bisect_left
 
 
 class GitHasher:
@@ -49,8 +52,8 @@ class TypeMismatchError(ValueError):
 class GitHashRepo:
     """
     GitHashRepo leverages git to calculate checksums for files and directories.
-    It uses `git add -A` to checksum files, and `git write-tree` to checksum
-    directories, with index and object storage in /.githash.
+    It uses `git add -A` to checksum files with index and object storage in
+    /.githash.
 
     It can be run in a dir that is also a normal git repo, but it is recommended
     to add /.githash to the gitignore.  Both to avoid checking in those files,
@@ -70,7 +73,7 @@ class GitHashRepo:
         self.repo_dir = repo_dir
         self.repo_dir_slash = os.path.join(self.repo_dir, '')
         self.dotdir = os.path.join(repo_dir, '.githash')
-        self.index = os.path.join(self.dotdir, 'index')
+        self.index_file = os.path.join(self.dotdir, 'index')
         self.objects = os.path.join(self.dotdir, 'objects')
 
     def mkdir(self, dir):
@@ -89,7 +92,7 @@ class GitHashRepo:
         self.mkdir(self.dotdir)
 
         process = subprocess.Popen(['git', 'add', '-A'],
-                                   env={'GIT_INDEX_FILE': self.index},
+                                   env={'GIT_INDEX_FILE': self.index_file},
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE,
                                    cwd=self.repo_dir)
@@ -97,51 +100,56 @@ class GitHashRepo:
         retcode = process.poll()
         if retcode:
             raise RuntimeError(stderr.strip())
+
+        self._create_index()
+
         return stdout.strip()
 
     def file(self, file):
-        normfile = self.normpath(file)
-
-        process = subprocess.Popen(['git', 'ls-files', '--stage', normfile],
-                                   env={'GIT_INDEX_FILE': self.index},
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE,
-                                   cwd=self.repo_dir)
-        stdout, stderr = process.communicate()
-        retcode = process.poll()
-        if retcode:
-            raise RuntimeError(stderr.strip())
-        lines = stdout.splitlines()
-        if len(lines) == 0:
+        norm_file = self._norm_path(file)
+        try:
+            entry = self.index[norm_file]
+            return self._entry_str(entry, norm_file)
+        except KeyError:
             raise NoSuchFileError(file)
-        if len(lines) > 1:
-            raise TypeMismatchError(file)
-        if lines[0].split('\t')[1] != normfile:
-            raise TypeMismatchError(file)
-        return lines[0]
 
     def tree(self, prefix):
-        norm_prefix = self.normpath(prefix)
+        norm_prefix = self._norm_path(prefix)
 
-        # TODO this creates a bunch of files in .githash/objects.  Needs GC?
-        self.mkdir(self.objects)
-        process = subprocess.Popen(['git', 'write-tree', '--missing-ok',
-                                    '--prefix', norm_prefix],
-                                   env={'GIT_INDEX_FILE': self.index,
-                                        'GIT_OBJECT_DIRECTORY': self.objects},
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE,
-                                   cwd=self.repo_dir)
-        stdout, stderr = process.communicate()
-        retcode = process.poll()
-        if retcode:
-            if 'prefix %s not found' % norm_prefix in stderr:
-                raise NoSuchFileError(prefix)
-            raise Exception(stderr.strip())
-        return stdout.strip()
+        paths = [p for p in self._subpaths(norm_prefix)]
+        if len(paths) == 0:
+            raise NoSuchFileError(prefix)
 
-    def normpath(self, path):
+        res = [self._entry_str(self.index[p], p) for p in paths]
+        return "\n".join(res)
+
+    def _create_index(self):
+        self.index = OrderedDict()
+        with open(self.index_file) as f:
+            for x in dindex.read_index(f):
+                self.index[x[0]] = dindex.IndexEntry(*x[1:])
+
+    def _subpaths(self, path):
+        keys = self.index.keys()
+        i = bisect_left(keys, path)
+        while i < len(keys):
+            key = keys[i]
+            if key.startswith(path):
+                yield key
+                i += 1
+            else:
+                break
+
+    def _norm_path(self, path):
         if path.startswith(self.repo_dir_slash):
             return path[len(self.repo_dir_slash):]
         else:
             return path
+
+    @staticmethod
+    def _entry_str(entry, path):
+        mode = '%o' % dindex.cleanup_mode(entry.mode)
+        return "{mode} {sha} 0\t{file}".format(mode=mode,
+                                               sha=entry.sha,
+                                               file=path)
+    

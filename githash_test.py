@@ -40,7 +40,7 @@ class TestGitHashRepo(TestGitHashBase):
     def test_update(self):
         self.mkfile('file', 'hello')
         self.repo.update()
-        self.assertTrue(os.path.exists(self.repo.index))
+        self.assertTrue(os.path.exists(self.repo.index_file))
 
     def test_file(self):
         self.mkfile('file', 'hello')
@@ -68,19 +68,24 @@ class TestGitHashRepo(TestGitHashBase):
         self.mkdir('dir')
         self.mkfile('dir/file', 'hello')
         self.repo.update()
-        with self.assertRaises(TypeMismatchError):
+        with self.assertRaises(NoSuchFileError):
             self.repo.file('dir')
 
     def test_tree(self):
         self.mkdir('dir')
         self.mkfile('dir/file', 'hello')
+        self.mkfile('dir/file2', 'hello2')
         self.repo.update()
+
+        expected = """100644 b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0 0\tdir/file
+100644 23294b0610492cf55c1c4835216f20d376a287dd 0\tdir/file2"""
+
         treestr = self.repo.tree('dir')
-        self.assertEqual('538e83d637ab07ada6d841aa2454e0d5af4e52b3', treestr)
+        self.assertEqual(expected, treestr)
 
         # full prefix path should work as well
         treestr = self.repo.tree(os.path.join(self.test_repo, 'dir'))
-        self.assertEqual('538e83d637ab07ada6d841aa2454e0d5af4e52b3', treestr)
+        self.assertEqual(expected, treestr)
 
     def test_nosuchtree(self):
         self.repo.update()
@@ -92,9 +97,8 @@ class TestGitHashRepo(TestGitHashBase):
         self.mkdir('dir')
         self.mkfile('dir/file', 'hello')
         self.repo.update()
-        with self.assertRaises(NoSuchFileError) as ve:
-            self.repo.tree('dir/file')
-        self.assertEqual(ve.exception.message, 'No such file: dir/file')
+        res = self.repo.tree('dir/file')
+        self.assertEqual('100644 b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0 0	dir/file', res)
 
     def test_link(self):
         self.mklink('hello', 'link')
@@ -132,14 +136,14 @@ class TestGitHasher(TestGitHashBase):
         self.file_test(0777, '95d8f52325cfd9d98471eff781a843bd01e62aa5')
 
     def test_tree(self):
-        self.tree_test(0644, '2d93a0db690fd6003a97c6f26633d6a5dd7ff883')
+        self.tree_test(0644, 'edff93fcd48450d0b3f5a2977da1b5a2e7a5d015')
 
     def test_tree_slash(self):
-        self.tree_test(0644, '2d93a0db690fd6003a97c6f26633d6a5dd7ff883',
+        self.tree_test(0644, 'edff93fcd48450d0b3f5a2977da1b5a2e7a5d015',
                        append_slash=True)
 
     def test_exetree(self):
-        self.tree_test(0777, '1b27d1fc6bd9222f1439e0ff632fb2ffcd86bff7')
+        self.tree_test(0777, '4bd31b14f7a237cacc22ed5d10e4d867c7201300')
 
     def test_tree_and_file(self):
         self.mkdir('dir')
@@ -149,5 +153,5 @@ class TestGitHasher(TestGitHashBase):
         hasher = GitHasher(repo=self.repo)
         hasher.add_tree('dir')
         hasher.add_file('file2')
-        self.assertEqual('b1e1aa61ddd0e8022e2260bfbdd8c40437991684', hasher.digest())
+        self.assertEqual('53b08c1fc6223d0c326e2146a5ccf8dbccf8223b', hasher.digest())
 
