@@ -26,13 +26,13 @@ class GitHasher:
         self.hash = hashlib.sha1()
         self.meta = {}
 
-    def add_file(self, file):
-        filehash = self.repo.file(file)
-        self.hash.update(filehash)
+    def add_file(self, f):
+        file_hash = self.repo.file(f)
+        self.hash.update(file_hash)
 
     def add_tree(self, prefix):
-        treehash = self.repo.tree(prefix)
-        self.hash.update(treehash)
+        tree_hash = self.repo.tree(prefix)
+        self.hash.update(tree_hash)
 
     def add_meta(self, key, value):
         self.meta[key] = value
@@ -50,12 +50,6 @@ class GitHasher:
 class NoSuchFileError(ValueError):
     def __init__(self, file):
         ValueError.__init__(self, "No such file: %s" % file)
-        self.file = file
-
-
-class TypeMismatchError(ValueError):
-    def __init__(self, file):
-        ValueError.__init__(self, "Type mismatch: %s" % file)
         self.file = file
 
 
@@ -82,9 +76,9 @@ class GitHashRepo:
     def __init__(self, repo_dir):
         self.repo_dir = repo_dir
         self.repo_dir_slash = os.path.join(self.repo_dir, '')
-        self.dotdir = os.path.join(repo_dir, '.githash')
-        self.index_file = os.path.join(self.dotdir, 'index')
-        self.objects = os.path.join(self.dotdir, 'objects')
+        self.dot_dir = os.path.join(repo_dir, '.githash')
+        self.index_file = os.path.join(self.dot_dir, 'index')
+        self.objects = os.path.join(self.dot_dir, 'objects')
 
     def mkdir(self, dir):
         try:
@@ -99,7 +93,7 @@ class GitHashRepo:
         again when files are known to have changed.
         :return:
         """
-        self.mkdir(self.dotdir)
+        self.mkdir(self.dot_dir)
 
         process = subprocess.Popen(['git', 'add', '-A'],
                                    env={'GIT_INDEX_FILE': self.index_file},
@@ -175,6 +169,7 @@ class GitHashRepo:
         assert(isinstance(entry.sha, (str, bytes, bytearray)))
         assert(isinstance(path, (str, bytes, bytearray)))
 
+        # this returns a format similar to git ls-files
         mode = b'%o' % dindex.cleanup_mode(entry.mode)
         return b"{mode} {sha} 0\t{file}".format(mode=mode,
                                                 sha=entry.sha,
